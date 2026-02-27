@@ -1,0 +1,15 @@
+# Credentials Google
+credentials/
+
+# Environment variables
+.env
+
+# Logs
+logs/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# VS Code
+.vscode/
