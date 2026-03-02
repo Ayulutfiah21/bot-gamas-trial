@@ -1,21 +1,28 @@
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
-from google.oauth2.credentials import Credentials
+import json
+import os
 from googleapiclient.discovery import build
+from google.oauth2.credentials import Credentials
+from app.config import CREDS
+from google.auth.transport.requests import Request
+# ================= GOOGLE SHEETS (Service Account) =================
+client = gspread.authorize(CREDS)
 
-from app.config import SERVICE_JSON, OAUTH_TOKEN
+# ================= GOOGLE DRIVE =================
+token_json = os.getenv("GOOGLE_OAUTH_TOKEN")
 
-scope = [
-    "https://spreadsheets.google.com/feeds",
-    "https://www.googleapis.com/auth/drive"
-]
+if token_json:
+    # Railway (pakai environment variable)
+    oauth_creds = Credentials.from_authorized_user_info(
+        json.loads(token_json)
+    )
+else:
+    # Lokal (pakai file)
+    oauth_creds = Credentials.from_authorized_user_file(
+        "credentials/token.json"
+    )
 
-creds = ServiceAccountCredentials.from_json_keyfile_name(
-    SERVICE_JSON,
-    scope
-)
+if oauth_creds.expired and oauth_creds.refresh_token:
+    oauth_creds.refresh(Request())
 
-client = gspread.authorize(creds)
-
-oauth_creds = Credentials.from_authorized_user_file(OAUTH_TOKEN)
 drive = build("drive", "v3", credentials=oauth_creds)

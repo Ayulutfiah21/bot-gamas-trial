@@ -2,10 +2,10 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from datetime import datetime
 import re
-from app.services.google_services import client, drive, creds
+from app.services.google_services import client, drive
 from app.keyboards import *
 from app.utils import safe_upper, safe_label
-from app.services.google_services import client, drive
+
 from app.config import (
     USER_MANAGEMENT_ID,
     STO_MAPPING,
