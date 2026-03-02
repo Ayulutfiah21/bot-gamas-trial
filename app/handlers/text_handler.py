@@ -486,7 +486,7 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
     if msg=="📝 Input Laporan":
         context.user_data.clear()
         context.user_data["mode"]="INPUT_PIC"
-        await update.message.reply_text("Masukkan Nama PIC:")
+        await update.message.reply_text("Masukkan Nama PIC (Nama Pengambil):")
         return
 
     if context.user_data.get("mode")=="INPUT_PIC":
