@@ -5,7 +5,7 @@ import re
 from app.services.google_services import client, drive
 from app.keyboards import *
 from app.utils import safe_upper, safe_label
-
+from app.config import CREDS
 from app.config import (
     USER_MANAGEMENT_ID,
     STO_MAPPING,
@@ -226,7 +226,7 @@ def get_year_spreadsheet(year):
         body={
             "type": "user",
             "role": "writer",
-            "emailAddress": creds.service_account_email
+            "emailAddress": CREDS.service_account_email
         }
     ).execute()
 
