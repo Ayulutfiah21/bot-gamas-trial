@@ -10,7 +10,7 @@ TOKEN = os.getenv("BOT_TOKEN")
 DRIVE_ROOT_DATA = os.getenv("DRIVE_ROOT_DATA")
 DRIVE_ROOT_FOTO = os.getenv("DRIVE_ROOT_FOTO")
 USER_MANAGEMENT_ID = os.getenv("USER_MANAGEMENT_ID")
-
+DASHBOARD_MASTER_NAME = "GAMAS_DASHBOARD_MASTER"
 # ================= GOOGLE CREDENTIAL =================
 scope = [
     "https://spreadsheets.google.com/feeds",

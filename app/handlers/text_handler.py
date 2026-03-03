@@ -43,6 +43,8 @@ def delete_drive_file_from_cell(cell_value):
     except Exception as e:
         print("ERROR DELETE:", e)
         return False
+    
+
 
 def get_formula_cell(ws, row, col):
     return ws.get_values(
@@ -69,12 +71,17 @@ def get_gamas_dashboard():
 
             for ws in master.worksheets():
 
-                rows = ws.get_all_values()
-                if len(rows) <= 1:
+                # Ambil hanya kolom yang diperlukan (lebih ringan)
+                sto_col = ws.col_values(2)
+                date_col = ws.col_values(5)
+                bulan_col = ws.col_values(10)
+
+                # Jika hanya header
+                if len(sto_col) <= 1:
                     continue
 
                 sheet_name = ws.title
-                count = len(rows) - 1
+                count = len(sto_col) - 1
 
                 total_year += count
                 total_all += count
@@ -83,25 +90,38 @@ def get_gamas_dashboard():
                     per_sheet_data[sheet_name] = {
                         "total": 0,
                         "bulan": {},
-                        "dates": []
+                        "min_date": None,
+                        "max_date": None
                     }
 
                 per_sheet_data[sheet_name]["total"] += count
 
-                for r in rows[1:]:
+                # Loop data mulai dari index 1 (skip header)
+                for i in range(1, len(sto_col)):
 
-                    sto = r[1]
+                    sto = sto_col[i]
+                    bulan = bulan_col[i] if i < len(bulan_col) else ""
+                    tanggal = date_col[i] if i < len(date_col) else ""
+
+                    # Hitung STO
                     if sto in total_per_sto:
                         total_per_sto[sto] += 1
 
-                    bulan = r[9]
+                    # Hitung bulan
                     if bulan:
                         per_sheet_data[sheet_name]["bulan"][bulan] = \
-                            per_sheet_data[sheet_name]["bulan"].get(bulan,0) + 1
+                            per_sheet_data[sheet_name]["bulan"].get(bulan, 0) + 1
 
+                    # Hitung rentang tanggal TANPA simpan semua tanggal
                     try:
-                        d = datetime.strptime(r[4], "%d/%m/%Y")
-                        per_sheet_data[sheet_name]["dates"].append(d)
+                        d = datetime.strptime(tanggal, "%d/%m/%Y")
+
+                        if not per_sheet_data[sheet_name]["min_date"] or d < per_sheet_data[sheet_name]["min_date"]:
+                            per_sheet_data[sheet_name]["min_date"] = d
+
+                        if not per_sheet_data[sheet_name]["max_date"] or d > per_sheet_data[sheet_name]["max_date"]:
+                            per_sheet_data[sheet_name]["max_date"] = d
+
                     except:
                         pass
 
@@ -920,9 +940,9 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
             text += f"🔹 {sheet_name}\n"
             text += f"Total : {data['total']}\n"
 
-            if data["dates"]:
-                start = min(data["dates"]).strftime("%d/%m/%Y")
-                end = max(data["dates"]).strftime("%d/%m/%Y")
+            if data["min_date"] and data["max_date"]:
+                start = data["min_date"].strftime("%d/%m/%Y")
+                end = data["max_date"].strftime("%d/%m/%Y")
                 text += f"Rentang : {start} s/d {end}\n"
 
             for bulan, jumlah in data["bulan"].items():
