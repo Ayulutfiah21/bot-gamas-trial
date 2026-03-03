@@ -17,7 +17,12 @@ from app.config import (
 
 from telegram import ReplyKeyboardMarkup
 
+import time
 
+dashboard_cache = {
+    "data": None,
+    "last_update": 0
+}
 user_sheet = client.open_by_key(USER_MANAGEMENT_ID).worksheet("USERS")
 
 def delete_drive_file_from_cell(cell_value):
@@ -107,7 +112,22 @@ def get_gamas_dashboard():
             continue
 
     return total_all, total_per_year, total_per_sto, per_sheet_data
+def get_gamas_dashboard_cached():
+    now = time.time()
 
+    # Cache berlaku 5 menit (300 detik)
+    if dashboard_cache["data"] and (now - dashboard_cache["last_update"] < 600):
+        print("DASHBOARD CACHE USED")
+        return dashboard_cache["data"]
+
+    print("DASHBOARD REGENERATE")
+
+    result = get_gamas_dashboard()
+
+    dashboard_cache["data"] = result
+    dashboard_cache["last_update"] = now
+
+    return result
 # ================= USER MANAGEMENT =================
 def renumber_users():
     data = user_sheet.get_all_values()
@@ -881,7 +901,7 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
     
     if msg == "📊 Dashboard GAMAS" and check_access(update) == "ADMIN":
     
-        total_all, total_per_year, total_per_sto, per_sheet_data = get_gamas_dashboard()
+        total_all, total_per_year, total_per_sto, per_sheet_data = get_gamas_dashboard_cached()
 
         text = "📊 DASHBOARD GAMAS PRO\n\n"
         text += f"Total Semua Laporan : {total_all}\n\n"
