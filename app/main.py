@@ -3,7 +3,7 @@ from app.config import TOKEN
 from app.handlers.start_handler import start
 from app.handlers.text_handler import text, load_ticket_cache
 from app.handlers.photo_handler import photo
-from app.handlers.admin_handler import listuser, approve, rebuild_dashboard
+from app.handlers.admin_handler import listuser, approve
 import threading
 from http.server import HTTPServer, BaseHTTPRequestHandler
 import os
@@ -36,7 +36,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("listuser", listuser))
     app.add_handler(CommandHandler("approve", approve))
-    app.add_handler(CommandHandler("rebuild_dashboard", rebuild_dashboard))
+   
 
     app.add_handler(MessageHandler(filters.TEXT, text))
     app.add_handler(MessageHandler(filters.PHOTO, photo))

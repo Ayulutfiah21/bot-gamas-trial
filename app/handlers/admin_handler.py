@@ -47,20 +47,3 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ User tidak ditemukan")
 
 
-# ================= REBUILD DASHBOARD =================
-async def rebuild_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-
-    if check_access(update) != "ADMIN":
-        await update.message.reply_text("❌ Akses ditolak")
-        return
-
-    await update.message.reply_text("🔄 Rebuilding dashboard...")
-
-    # hapus cache lama
-    dashboard_cache["data"] = None
-    dashboard_cache["last_update"] = 0
-
-    # regenerate dashboard
-    get_gamas_dashboard()
-
-    await update.message.reply_text("✅ Dashboard berhasil diperbarui.")

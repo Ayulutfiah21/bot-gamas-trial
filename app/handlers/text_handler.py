@@ -1108,6 +1108,44 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Kirim foto baru sekarang.")
         return
     # ===== DASHBOARD ADMIN =====
+    if msg == "/dashboard refresh" and check_access(update) == "ADMIN":
+    
+        await update.message.reply_text("🔄 Rebuild dashboard...")
+
+        dashboard_cache["data"] = None
+
+        total_all, total_per_year, total_per_sto, per_sheet_data = get_gamas_dashboard_cached()
+
+        text = "📊 DASHBOARD GAMAS (REFRESH)\n\n"
+        text += f"Total Semua Laporan : {total_all}\n\n"
+
+        for y, t in total_per_year.items():
+            text += f"📅 Tahun {y} : {t}\n"
+
+        text += "\n📍 Per STO:\n"
+        for sto, t in total_per_sto.items():
+            text += f"{sto} : {t}\n"
+
+        text += "\n📂 Per Sheet:\n\n"
+
+        for sheet_name, data in per_sheet_data.items():
+
+            text += f"🔹 {sheet_name}\n"
+            text += f"Total : {data['total']}\n"
+
+            if data["min_date"] and data["max_date"]:
+                start = data["min_date"].strftime("%d/%m/%Y")
+                end = data["max_date"].strftime("%d/%m/%Y")
+                text += f"Rentang : {start} s/d {end}\n"
+
+            for bulan, jumlah in data["bulan"].items():
+                text += f"{bulan} : {jumlah}\n"
+
+            text += "\n"
+
+        await update.message.reply_text(text, reply_markup=admin_menu())
+
+        return
     if msg=="📊 Dashboard User" and check_access(update)=="ADMIN":
 
         users=user_sheet.get_all_values()
@@ -1136,7 +1174,7 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
     """
         await update.message.reply_text(text,reply_markup=admin_menu())
         return
-    
+
     if msg == "📊 Dashboard GAMAS" and check_access(update) == "ADMIN":
     
         total_all, total_per_year, total_per_sto, per_sheet_data = get_gamas_dashboard_cached()
