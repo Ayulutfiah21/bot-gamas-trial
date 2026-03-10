@@ -217,7 +217,6 @@ def get_folder(name, parent):
     
     key = f"{parent}_{name}"
 
-    # cek cache dulu
     if key in FOLDER_CACHE:
         return FOLDER_CACHE[key]
 
@@ -225,13 +224,16 @@ def get_folder(name, parent):
 
     result = drive.files().list(
         q=query,
-        fields="files(id)"
+        fields="files(id,name)",
+        pageSize=10
     ).execute()
 
-    if result["files"]:
-        folder_id = result["files"][0]["id"]
+    files = result.get("files", [])
 
+    if len(files) > 0:
+        folder_id = files[0]["id"]
     else:
+        time.sleep(0.3)
         folder = drive.files().create(
             body={
                 "name": name,
@@ -243,7 +245,6 @@ def get_folder(name, parent):
 
         folder_id = folder["id"]
 
-    # simpan ke cache
     FOLDER_CACHE[key] = folder_id
 
     return folder_id
@@ -318,34 +319,22 @@ def get_year_spreadsheet(year, date):
         "BULAN"
     ]
 
-    # ================= SHEET BAU BAU =================
-    ws_bau = master.add_worksheet(
-        title="GAMAS BAU BAU",
-        rows=1000,
-        cols=50
-    )
+    # ===== rename sheet1 otomatis =====
+    ws1 = master.sheet1
+    ws1.update_title("GAMAS BAU BAU")
 
-    ws_bau.update("A1:J1", [header])
-    ws_bau.update("A2", "=ROW()-1")
+    ws1.update("A1:J1", [header])
+    ws1.update("A2", "=ROW()-1")
 
-
-    # ================= SHEET UNAAHA =================
-    ws_unh = master.add_worksheet(
+    # ===== buat sheet kedua =====
+    ws2 = master.add_worksheet(
         title="GAMAS UNAAHA",
         rows=1000,
         cols=50
     )
 
-    ws_unh.update("A1:J1", [header])
-    ws_unh.update("A2", "=ROW()-1")
-
-
-    # ================= HAPUS SHEET1 DEFAULT =================
-    try:
-        default = master.worksheet("Sheet1")
-        master.del_worksheet(default)
-    except:
-        pass
+    ws2.update("A1:J1", [header])
+    ws2.update("A2", "=ROW()-1")
 
     return sheet_id
 
