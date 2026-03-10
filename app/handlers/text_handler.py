@@ -266,6 +266,22 @@ def get_year_folder_data(year):
 
 def get_year_folder_foto(year):
     return get_folder(f"01_GAMAS_{year}", DRIVE_ROOT_FOTO)
+def get_month_folder_foto(parent_folder, date):
+    
+    month_name = BULAN_FOLDER[date.month]
+
+    return get_folder(month_name, parent_folder)
+def get_ticket_folder(ticket, date):
+    
+    year = date.year
+
+    year_folder = get_year_folder_foto(year)
+
+    month_folder = get_month_folder_foto(year_folder, date)
+
+    ticket_folder = get_folder(ticket, month_folder)
+
+    return ticket_folder
 
 def get_month_folder(parent_folder, date):
     
@@ -451,6 +467,13 @@ def insert_sorted(ws, row_data, date_value):
 
     ws.insert_row(row_data, insert_position)
 
+    # update nomor otomatis
+    rows = ws.col_values(2)
+
+    numbers = [[i] for i in range(1, len(rows))]
+
+    ws.update(f"A2:A{len(rows)}", numbers)
+
     return insert_position
 
 
@@ -552,6 +575,19 @@ def find_empty_foto_col(ws,row):
         if col > len(row_data) or not row_data[col-1]:
             return col
         col += 1
+
+def add_foto_link(ws, row, col, url, label):
+    
+    existing = get_formula_cell(ws, row, col)
+
+    new_link = f'=HYPERLINK("{url}","{label}")'
+
+    if existing:
+        value = existing + "\n" + new_link
+    else:
+        value = new_link
+
+    ws.update_cell(row, col, value)
 
 def find_label_column(ws, row, label):
     
