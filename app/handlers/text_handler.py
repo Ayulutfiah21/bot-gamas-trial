@@ -25,6 +25,8 @@ dashboard_cache = {
     "last_update": 0
 }
 
+SPREADSHEET_CACHE = {}
+
 TICKET_CACHE = set()
 TICKET_INDEX = {}
 FOLDER_CACHE = {}
@@ -290,6 +292,10 @@ def get_month_folder(parent_folder, date):
     return get_folder(month_name, parent_folder)
 
 def get_year_spreadsheet(year, date):
+    cache_key = f"{year}_{date.month}"
+
+    if cache_key in SPREADSHEET_CACHE:
+        return SPREADSHEET_CACHE[cache_key]
     
     folder_year = get_year_folder_data(year)
     folder_month = get_month_folder(folder_year, date)
@@ -339,6 +345,8 @@ def get_year_spreadsheet(year, date):
             )
             ws2.update("A1:J1", [header])
             ws2.update("A2", "=ROW()-1")
+        
+        SPREADSHEET_CACHE[cache_key] = sheet_id
 
         return sheet_id
 
@@ -369,6 +377,7 @@ def get_year_spreadsheet(year, date):
 
     ws2.update("A1:J1", [header])
     ws2.update("A2", "=ROW()-1")
+    SPREADSHEET_CACHE[cache_key] = sheet_id
 
     return sheet_id
 def load_ticket_cache():
@@ -450,31 +459,22 @@ def ensure_sheet(master, sheet_name):
 # ================= INSERT SORTED =================
 def insert_sorted(ws, row_data, date_value):
     
-    dates = ws.col_values(5)
-    insert_position = len(dates) + 1
+    ws.append_row(row_data)
 
-    for i in range(2, len(dates)+1):
+    rows = ws.get_all_values()
 
-        try:
-            existing_date = datetime.strptime(dates[i-1], "%d/%m/%Y")
+    header = rows[0]
+    data = rows[1:]
 
-            if date_value < existing_date:
-                insert_position = i
-                break
+    data.sort(key=lambda x: datetime.strptime(x[4], "%d/%m/%Y"))
 
-        except:
-            continue
+    ws.update("A2", data)
 
-    ws.insert_row(row_data, insert_position)
+    numbers = [[i] for i in range(1, len(data)+1)]
 
-    # update nomor otomatis
-    rows = ws.col_values(2)
+    ws.update(f"A2:A{len(data)+1}", numbers)
 
-    numbers = [[i] for i in range(1, len(rows))]
-
-    ws.update(f"A2:A{len(rows)}", numbers)
-
-    return insert_position
+    return len(data)+1
 
 
 # ================= FIND TIKET LINTAS TAHUN =================
