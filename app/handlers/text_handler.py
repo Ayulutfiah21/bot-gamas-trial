@@ -52,10 +52,20 @@ def delete_drive_file_from_cell(cell_value):
 
 
 def get_formula_cell(ws, row, col):
-    return ws.get_values(
+    values = ws.get_values(
         f"A{row}:ZZ{row}",
         value_render_option="FORMULA"
-    )[0][col-1]
+    )
+
+    if not values:
+        return ""
+
+    row_data = values[0]
+
+    if col-1 >= len(row_data):
+        return ""
+
+    return row_data[col-1]
     
 def get_gamas_dashboard():
     
@@ -225,7 +235,7 @@ def get_folder(name, parent):
     result = drive.files().list(
         q=query,
         fields="files(id,name)",
-        pageSize=10
+        pageSize=1
     ).execute()
 
     files = result.get("files", [])
@@ -319,10 +329,9 @@ def get_year_spreadsheet(year, date):
         "BULAN"
     ]
 
-    # ===== rename sheet1 otomatis =====
+    # ===== rename sheet1 jadi GAMAS BAU BAU =====
     ws1 = master.sheet1
     ws1.update_title("GAMAS BAU BAU")
-
     ws1.update("A1:J1", [header])
     ws1.update("A2", "=ROW()-1")
 
@@ -380,6 +389,38 @@ def load_ticket_cache():
             continue
 
     print("TICKET CACHE LOADED:", len(TICKET_CACHE))
+    
+def ensure_sheet(master, sheet_name):
+    
+    header = [
+        "NO",
+        "STO",
+        "NOMOR TIKET",
+        "CATUAN/ NAMA GAMAS (NAMA ODP / ODC / OLT)",
+        "REPORTED DATE",
+        "JASA",
+        "KETERANGAN",
+        "PIC (NAMA PENGAMBIL)",
+        "NAMA MITRA",
+        "BULAN"
+    ]
+
+    try:
+        ws = master.worksheet(sheet_name)
+        return ws
+
+    except:
+
+        ws = master.add_worksheet(
+            title=sheet_name,
+            rows=1000,
+            cols=50
+        )
+
+        ws.update("A1:J1", [header])
+        ws.update("A2", "=ROW()-1")
+
+        return ws
 
 
 # ================= INSERT SORTED =================
@@ -420,11 +461,17 @@ def find_ticket_global(ticket):
 
 # ================= FOTO LIST DINAMIS =================
 def foto_list(ws, row):
-    
-    row_data = ws.get_values(
+    values = ws.get_values(
         f"A{row}:ZZ{row}",
         value_render_option="FORMULA"
-    )[0]
+    )
+
+    if not values:
+        return []
+
+    row_data = values[0]
+    
+ 
 
     fotos = []
     col = 11
@@ -619,6 +666,30 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text("Kembali ke menu utama.", reply_markup=main_menu())
         return
+    # ===== GLOBAL BATAL =====
+    if msg == "❌ BATAL":
+
+        # jika sedang input/edit
+        if context.user_data:
+
+            # jika sedang preview kembali ke menu
+            if context.user_data.get("mode") == "PREVIEW":
+                context.user_data.clear()
+                await update.message.reply_text("Input dibatalkan.", reply_markup=main_menu())
+                return
+
+            # jika sedang edit kembali ke preview
+            if "mode" in context.user_data:
+                context.user_data["mode"] = "PREVIEW"
+
+                await update.message.reply_text(
+                    build_preview(context.user_data),
+                    reply_markup=preview_menu()
+                )
+                return
+
+        await update.message.reply_text("Tidak ada proses yang dibatalkan.")
+        return
     # ===== REGISTRASI =====
     if context.user_data.get("mode")=="REG_NAMA":
         context.user_data["reg_nama"]=safe_upper(msg)
@@ -658,6 +729,8 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         return
 
     if context.user_data.get("mode")=="INPUT_PIC":
+        if msg in ["🔙 KEMBALI", "❌ BATAL"]:
+            return
         context.user_data["PIC"]=safe_upper(msg)
         context.user_data["mode"]="INPUT_DATE"
         await update.message.reply_text("Masukkan Tanggal (dd/mm/yyyy):")
@@ -700,12 +773,16 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         return
 
     if context.user_data.get("mode")=="INPUT_LOC":
+        if msg in ["🔙 KEMBALI", "❌ BATAL"]:
+            return
         context.user_data["LOC"]=safe_upper(msg)
         context.user_data["mode"]="INPUT_JASA"
         await update.message.reply_text("Masukkan Jasa / Material:")
         return
 
     if context.user_data.get("mode")=="INPUT_JASA":
+        if msg in ["🔙 KEMBALI", "❌ BATAL"]:
+            return
         context.user_data["JASA"]=safe_upper(msg)
         context.user_data["mode"]="INPUT_KET"
         await update.message.reply_text("Pilih Keterangan:",reply_markup=ket_menu())
@@ -728,6 +805,8 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         return
     
     if context.user_data.get("mode")=="INPUT_KET_MANUAL":
+        if msg in ["🔙 KEMBALI", "❌ BATAL"]:
+            return
         context.user_data["KET"]=safe_upper(msg)
         context.user_data["mode"]="PREVIEW"
         await update.message.reply_text(build_preview(context.user_data),reply_markup=preview_menu())
@@ -823,6 +902,8 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     # ===== HANDLE EDIT KET MANUAL =====
     if context.user_data.get("mode") == "EDIT_KET_MANUAL":
+        if msg in ["🔙 KEMBALI", "❌ BATAL"]:
+            return
 
         context.user_data["KET"] = safe_upper(msg)
         context.user_data["mode"] = "PREVIEW"
@@ -855,7 +936,9 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     # ===== HANDLE EDIT FIELD BIASA =====
     if context.user_data.get("mode") == "WAIT_EDIT":
-
+        if msg in ["🔙 KEMBALI", "❌ BATAL"]:
+            return
+    
         field = context.user_data["edit_field"]
         context.user_data[field] = safe_upper(msg)
         context.user_data["mode"] = "PREVIEW"
@@ -867,52 +950,66 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         return
 
     # ===== SIMPAN =====
+    # ===== SIMPAN =====
     if msg=="💾 SIMPAN" and context.user_data.get("mode")=="PREVIEW":
 
-        d=context.user_data
-        year=d["DATE"].year
+        try:
 
-        sheet_id=get_year_spreadsheet(year, d["DATE"])
-        master_year=client.open_by_key(sheet_id)
+            d=context.user_data
+            year=d["DATE"].year
 
-        sheet_name=STO_MAPPING[d["STO"]]["sheet"]
-        mitra=STO_MAPPING[d["STO"]]["mitra"]
+            sheet_id=get_year_spreadsheet(year, d["DATE"])
+            master_year=client.open_by_key(sheet_id)
 
-        ws=master_year.worksheet(sheet_name)
+            sheet_name=STO_MAPPING[d["STO"]]["sheet"]
+            mitra=STO_MAPPING[d["STO"]]["mitra"]
 
-        row=[
-            "",
-            d["STO"],
-            d["INC"],
-            d["LOC"],
-            d["DATE"].strftime("%d/%m/%Y"),
-            d["JASA"],
-            d["KET"],
-            d["PIC"],
-            mitra,
-            BULAN_ID[d["DATE"].month]
-        ]
+            # pastikan sheet ada
+            ws = ensure_sheet(master_year, sheet_name)
 
-        row_position = insert_sorted(ws,row,d["DATE"])
+            row=[
+                "",
+                d["STO"],
+                d["INC"],
+                d["LOC"],
+                d["DATE"].strftime("%d/%m/%Y"),
+                d["JASA"],
+                d["KET"],
+                d["PIC"],
+                mitra,
+                BULAN_ID[d["DATE"].month]
+            ]
 
-        TICKET_CACHE.add(d["INC"])
+            row_position = insert_sorted(ws,row,d["DATE"])
 
-        TICKET_INDEX[d["INC"]] = {
-            "sheet": ws,
-            "row": row_position,
-            "year": year
-        }
+            TICKET_CACHE.add(d["INC"])
 
-        dashboard_cache["data"] = None
+            TICKET_INDEX[d["INC"]] = {
+                "sheet": ws,
+                "row": row_position,
+                "year": year
+            }
 
-        context.user_data.clear()
-        await update.message.reply_text("✅ Laporan tersimpan.",reply_markup=main_menu())
+            dashboard_cache["data"] = None
+
+            context.user_data.clear()
+
+            await update.message.reply_text(
+                "✅ Laporan berhasil disimpan.",
+                reply_markup=main_menu()
+            )
+
+        except Exception as e:
+
+            print("ERROR SIMPAN:", e)
+
+            await update.message.reply_text(
+                "❌ Gagal menyimpan laporan.\nSilakan coba lagi atau hubungi admin."
+            )
+
         return
 
-    if msg=="❌ BATAL":
-        context.user_data.clear()
-        await update.message.reply_text("Input dibatalkan.",reply_markup=main_menu())
-        return
+    
     
     # ===== MULAI UPLOAD FOTO =====
     if msg == "📸 Upload Foto":
@@ -976,6 +1073,8 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         return
 
     if context.user_data.get("mode") == "UPLOAD_LABEL":
+        if msg in ["🔙 KEMBALI", "❌ BATAL"]:
+            return
         context.user_data["label"] = safe_label(msg).upper()
         context.user_data["mode"] = "WAIT_FOTO"
         await update.message.reply_text("Kirim foto sekarang.")
@@ -1100,6 +1199,8 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
 
     if context.user_data.get("mode") == "EDIT_FOTO_LABEL":
+        if msg in ["🔙 KEMBALI", "❌ BATAL"]:
+            return
         context.user_data["label"] = safe_label(msg)
         context.user_data["mode"] = "WAIT_EDIT_FOTO"
         await update.message.reply_text("Kirim foto baru sekarang.")
