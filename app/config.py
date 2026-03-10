@@ -53,7 +53,7 @@ BULAN_FOLDER = {
 STO_MAPPING = {
     "BBU": {"sheet":"GAMAS BAU BAU","mitra":"FMP BAU BAU"},
     "WNC": {"sheet":"GAMAS BAU BAU","mitra":"FMP WANCI"},
-    "UNH": {"sheet":"FMP UNAAHA","mitra":"FMP UNAAHA"}
+    "UNH": {"sheet":"GAMAS UNAAHA","mitra":"FMP UNAAHA"}
 }
 
 KET_DEFAULT = [
