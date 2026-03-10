@@ -268,8 +268,11 @@ def get_year_spreadsheet(year, date):
     folder_month = get_month_folder(folder_year, date)
 
     folder_id = folder_month
-    title = f"GAMAS_{year}"
+    month_name = BULAN_FOLDER[date.month]
 
+    title = f"GAMAS_{month_name}_{year}"
+
+    # cek apakah spreadsheet sudah ada
     files = drive.files().list(
         q=f"name='{title}' and '{folder_id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
         fields="files(id)"
@@ -278,7 +281,7 @@ def get_year_spreadsheet(year, date):
     if files["files"]:
         return files["files"][0]["id"]
 
-    # create spreadsheet
+    # ================= CREATE SPREADSHEET =================
     file = drive.files().create(
         body={
             "name": title,
@@ -300,13 +303,12 @@ def get_year_spreadsheet(year, date):
         }
     ).execute()
 
-    # buat sheet default
-    master_year = client.open_by_key(sheet_id)
+    master = client.open_by_key(sheet_id)
 
-    # Sheet 1
-    ws1 = master_year.add_worksheet(title="GAMAS BAU BAU", rows=1000, cols=50)
-    ws1.append_row([
-        "NO","STO","NOMOR TIKET",
+    header = [
+        "NO",
+        "STO",
+        "NOMOR TIKET",
         "CATUAN/ NAMA GAMAS (NAMA ODP / ODC / OLT)",
         "REPORTED DATE",
         "JASA",
@@ -314,28 +316,34 @@ def get_year_spreadsheet(year, date):
         "PIC (NAMA PENGAMBIL)",
         "NAMA MITRA",
         "BULAN"
-    ])
-    # formula nomor otomatis
-    ws1.update('A2', '=ROW()-1')
+    ]
 
-    # Sheet 2
-    ws2 = master_year.add_worksheet(title="GAMAS UNAAHA", rows=1000, cols=50)
-    ws2.append_row([
-        "NO","STO","NOMOR TIKET",
-        "CATUAN/ NAMA GAMAS (NAMA ODP / ODC / OLT)",
-        "REPORTED DATE",
-        "JASA",
-        "KETERANGAN",
-        "PIC (NAMA PENGAMBIL)",
-        "NAMA MITRA",
-        "BULAN"
-    ])
-    # formula nomor otomatis
-    ws2.update('A2', '=ROW()-1')
+    # ================= SHEET BAU BAU =================
+    ws_bau = master.add_worksheet(
+        title="GAMAS BAU BAU",
+        rows=1000,
+        cols=50
+    )
 
-    # hapus Sheet1 default bawaan
+    ws_bau.update("A1:J1", [header])
+    ws_bau.update("A2", "=ROW()-1")
+
+
+    # ================= SHEET UNAAHA =================
+    ws_unh = master.add_worksheet(
+        title="GAMAS UNAAHA",
+        rows=1000,
+        cols=50
+    )
+
+    ws_unh.update("A1:J1", [header])
+    ws_unh.update("A2", "=ROW()-1")
+
+
+    # ================= HAPUS SHEET1 DEFAULT =================
     try:
-        master_year.del_worksheet(master_year.worksheet("Sheet1"))
+        default = master.worksheet("Sheet1")
+        master.del_worksheet(default)
     except:
         pass
 
