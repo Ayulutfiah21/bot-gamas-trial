@@ -11,6 +11,7 @@ from app.config import (
     STO_MAPPING,
     KET_DEFAULT,
     BULAN_ID,
+    BULAN_FOLDER,
     DRIVE_ROOT_DATA,
     DRIVE_ROOT_FOTO
 )
@@ -23,11 +24,15 @@ dashboard_cache = {
     "data": None,
     "last_update": 0
 }
+
+TICKET_CACHE = set()
+TICKET_INDEX = {}
+FOLDER_CACHE = {}
 user_sheet = client.open_by_key(USER_MANAGEMENT_ID).worksheet("USERS")
 
 def delete_drive_file_from_cell(cell_value):
     try:
-        match = re.search(r'/d/([a-zA-Z0-9_-]+)', cell_value)
+        match = re.search(r'd/([a-zA-Z0-9_-]+)', cell_value)
         if not match:
             print("Tidak ada file ID")
             return False
@@ -64,7 +69,7 @@ def get_gamas_dashboard():
 
     for year in years:
         try:
-            sheet_id = get_year_spreadsheet(year)
+            sheet_id = get_year_spreadsheet(year, datetime(year,1,1))
             master = client.open_by_key(sheet_id)
 
             total_year = 0
@@ -135,8 +140,8 @@ def get_gamas_dashboard():
 def get_gamas_dashboard_cached():
     now = time.time()
 
-    # Cache berlaku 5 menit (300 detik)
-    if dashboard_cache["data"] and (now - dashboard_cache["last_update"] < 600):
+    # Cache berlaku 1 jam (3600 detik)
+    if dashboard_cache["data"] and (now - dashboard_cache["last_update"] < 3600):
         print("DASHBOARD CACHE USED")
         return dashboard_cache["data"]
 
@@ -209,22 +214,39 @@ def check_access(update):
 # ================= DRIVE ENGINE =================
 
 def get_folder(name, parent):
+    
+    key = f"{parent}_{name}"
+
+    # cek cache dulu
+    if key in FOLDER_CACHE:
+        return FOLDER_CACHE[key]
+
     query = f"name='{name}' and '{parent}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    result = drive.files().list(q=query, fields="files(id)").execute()
 
-    if result["files"]:
-        return result["files"][0]["id"]
-
-    folder = drive.files().create(
-        body={
-            "name": name,
-            "mimeType": "application/vnd.google-apps.folder",
-            "parents": [parent]
-        },
-        fields="id"
+    result = drive.files().list(
+        q=query,
+        fields="files(id)"
     ).execute()
 
-    return folder["id"]
+    if result["files"]:
+        folder_id = result["files"][0]["id"]
+
+    else:
+        folder = drive.files().create(
+            body={
+                "name": name,
+                "mimeType": "application/vnd.google-apps.folder",
+                "parents": [parent]
+            },
+            fields="id"
+        ).execute()
+
+        folder_id = folder["id"]
+
+    # simpan ke cache
+    FOLDER_CACHE[key] = folder_id
+
+    return folder_id
 
 
 def get_year_folder_data(year):
@@ -234,10 +256,18 @@ def get_year_folder_data(year):
 def get_year_folder_foto(year):
     return get_folder(f"01_GAMAS_{year}", DRIVE_ROOT_FOTO)
 
+def get_month_folder(parent_folder, date):
+    
+    month_name = BULAN_FOLDER[date.month]
 
-def get_year_spreadsheet(year):
+    return get_folder(month_name, parent_folder)
 
-    folder_id = get_year_folder_data(year)
+def get_year_spreadsheet(year, date):
+    
+    folder_year = get_year_folder_data(year)
+    folder_month = get_month_folder(folder_year, date)
+
+    folder_id = folder_month
     title = f"GAMAS_{year}"
 
     files = drive.files().list(
@@ -285,9 +315,11 @@ def get_year_spreadsheet(year):
         "NAMA MITRA",
         "BULAN"
     ])
+    # formula nomor otomatis
+    ws1.update('A2', '=ROW()-1')
 
     # Sheet 2
-    ws2 = master_year.add_worksheet(title="FMP UNAAHA", rows=1000, cols=50)
+    ws2 = master_year.add_worksheet(title="GAMAS UNAAHA", rows=1000, cols=50)
     ws2.append_row([
         "NO","STO","NOMOR TIKET",
         "CATUAN/ NAMA GAMAS (NAMA ODP / ODC / OLT)",
@@ -298,6 +330,8 @@ def get_year_spreadsheet(year):
         "NAMA MITRA",
         "BULAN"
     ])
+    # formula nomor otomatis
+    ws2.update('A2', '=ROW()-1')
 
     # hapus Sheet1 default bawaan
     try:
@@ -307,46 +341,21 @@ def get_year_spreadsheet(year):
 
     return sheet_id
 
-
-# ================= INSERT SORTED =================
-def insert_sorted(ws, row_data, date_value):
-
-    rows = ws.get_all_values()
-    insert_position = len(rows) + 1
-
-    for i in range(2, len(rows)+1):
-        try:
-            existing_date = datetime.strptime(ws.cell(i,5).value,"%d/%m/%Y")
-            if date_value < existing_date:
-                insert_position = i
-                break
-        except:
-            continue
-
-    ws.insert_row(row_data, insert_position)
-
-    # renumber NO
-    data = ws.get_all_values()
-    for i in range(2, len(data)+1):
-        ws.update_cell(i,1,i-1)
-
-
-# ================= FIND TIKET LINTAS TAHUN =================
-def find_ticket_global(ticket):
+def load_ticket_cache():
     
-    ticket = safe_upper(ticket)
+    global TICKET_CACHE
 
-    #ambil 3 tahun terakhir termasuk tahun depan
     current_year = datetime.now().year
     years = [current_year-1, current_year, current_year+1]
 
     for year in years:
 
         try:
-            sheet_id = get_year_spreadsheet(year)
-            master_year = client.open_by_key(sheet_id)
 
-            for ws in master_year.worksheets():
+            sheet_id = get_year_spreadsheet(year, datetime(year,1,1))
+            master = client.open_by_key(sheet_id)
+
+            for ws in master.worksheets():
 
                 headers = [h.strip().upper() for h in ws.row_values(1)]
 
@@ -354,21 +363,67 @@ def find_ticket_global(ticket):
                     continue
 
                 col = headers.index("NOMOR TIKET") + 1
+
                 values = ws.col_values(col)
 
-                for i, v in enumerate(values):
-                    if safe_upper(v) == ticket:
-                        return ws, i+1, year
+                for i, v in enumerate(values[1:], start=2):
+    
+                    if v:
+                        ticket = safe_upper(v)
+
+                        TICKET_CACHE.add(ticket)
+
+                        TICKET_INDEX[ticket] = {
+                            "sheet": ws,
+                            "row": i,
+                            "year": year
+                        }
 
         except:
             continue
+
+    print("TICKET CACHE LOADED:", len(TICKET_CACHE))
+
+
+# ================= INSERT SORTED =================
+def insert_sorted(ws, row_data, date_value):
+    
+    dates = ws.col_values(5)
+    insert_position = len(dates) + 1
+
+    for i in range(2, len(dates)+1):
+
+        try:
+            existing_date = datetime.strptime(dates[i-1], "%d/%m/%Y")
+
+            if date_value < existing_date:
+                insert_position = i
+                break
+
+        except:
+            continue
+
+    ws.insert_row(row_data, insert_position)
+
+    return insert_position
+
+
+# ================= FIND TIKET LINTAS TAHUN =================
+def find_ticket_global(ticket):
+    
+    ticket = safe_upper(ticket)
+
+    if ticket in TICKET_INDEX:
+
+        data = TICKET_INDEX[ticket]
+
+        return data["sheet"], data["row"], data["year"]
 
     return None, None, None
 
 # ================= FOTO LIST DINAMIS =================
 def foto_list(ws, row):
     
-    # Ambil FORMULA asli, bukan value render
     row_data = ws.get_values(
         f"A{row}:ZZ{row}",
         value_render_option="FORMULA"
@@ -379,15 +434,58 @@ def foto_list(ws, row):
 
     while col <= len(row_data):
 
-        cell_value = row_data[col-1]
+        cell = row_data[col-1]
 
-        if cell_value and "HYPERLINK" in cell_value:
-            try:
-                parts = cell_value.split('"')
-                label = parts[-2]
-                fotos.append((col, label))
-            except:
-                pass
+        if cell and "HYPERLINK" in cell:
+
+            lines = cell.split("\n")
+
+            for line in lines:
+                try:
+                    parts = line.split('"')
+                    label = parts[3]
+                    fotos.append((col, label))
+                except:
+                    pass
+
+        col += 1
+
+    return fotos
+def foto_list_detail(ws, row):
+    
+    row_data = ws.get_values(
+        f"A{row}:ZZ{row}",
+        value_render_option="FORMULA"
+    )[0]
+
+    fotos = []
+
+    col = 11
+
+    while col <= len(row_data):
+
+        cell = row_data[col-1]
+
+        if cell and "HYPERLINK" in cell:
+
+            lines = cell.split("\n")
+
+            for i,line in enumerate(lines):
+
+                try:
+                    parts = line.split('"')
+                    link = parts[1]
+                    label = parts[3]
+
+                    fotos.append({
+                        "col": col,
+                        "line": i,
+                        "link": link,
+                        "label": label
+                    })
+
+                except:
+                    pass
 
         col += 1
 
@@ -402,6 +500,39 @@ def find_empty_foto_col(ws,row):
         if col > len(row_data) or not row_data[col-1]:
             return col
         col += 1
+
+def find_label_column(ws, row, label):
+    
+    row_data = ws.get_values(
+        f"A{row}:ZZ{row}",
+        value_render_option="FORMULA"
+    )[0]
+
+    label = safe_label(label)
+
+    col = 11
+
+    while col <= len(row_data):
+
+        cell = row_data[col-1]
+
+        if cell:
+
+            lines = cell.split("\n")
+
+            for line in lines:
+                try:
+                    parts = line.split('"')
+                    cell_label = parts[3]
+
+                    if safe_label(cell_label) == label:
+                        return col
+                except:
+                    pass
+
+        col += 1
+
+    return None
 # ================= MENU =================
 def admin_menu():
     return ReplyKeyboardMarkup(
@@ -550,12 +681,13 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
     if context.user_data.get("mode")=="INPUT_INC":
 
-        ws,row,y=find_ticket_global(msg)
-        if ws:
+        ticket = safe_upper(msg)
+
+        if ticket in TICKET_CACHE:
             await update.message.reply_text("❌ Nomor tiket sudah ada.")
             return
 
-        context.user_data["INC"]=safe_upper(msg)
+        context.user_data["INC"]=ticket
         context.user_data["mode"]="INPUT_STO"
         await update.message.reply_text("Pilih STO:",reply_markup=sto_menu())
         return
@@ -743,7 +875,7 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         d=context.user_data
         year=d["DATE"].year
 
-        sheet_id=get_year_spreadsheet(year)
+        sheet_id=get_year_spreadsheet(year, d["DATE"])
         master_year=client.open_by_key(sheet_id)
 
         sheet_name=STO_MAPPING[d["STO"]]["sheet"]
@@ -764,7 +896,17 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
             BULAN_ID[d["DATE"].month]
         ]
 
-        insert_sorted(ws,row,d["DATE"])
+        row_position = insert_sorted(ws,row,d["DATE"])
+
+        TICKET_CACHE.add(d["INC"])
+
+        TICKET_INDEX[d["INC"]] = {
+            "sheet": ws,
+            "row": row_position,
+            "year": year
+        }
+
+        dashboard_cache["data"] = None
 
         context.user_data.clear()
         await update.message.reply_text("✅ Laporan tersimpan.",reply_markup=main_menu())
@@ -783,19 +925,61 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
         return
 
     if context.user_data.get("mode") == "UPLOAD_INC":
-        ws,row,year = find_ticket_global(msg)
+        
+        ticket = safe_upper(msg)
+
+        ws, row, year = find_ticket_global(ticket)
 
         if not ws:
             await update.message.reply_text("❌ Nomor tiket tidak ditemukan.")
             return
 
-        context.user_data["INC"] = safe_upper(msg)
+        context.user_data["INC"] = ticket
+
+        
+
+        fotos = foto_list_detail(ws, row)
+
+        context.user_data["foto_map"] = fotos
+
+        text = "📸 FOTO SAAT INI:\n\n"
+
+        if not fotos:
+            text += "Belum ada foto.\n"
+
+        else:
+
+            label_count = {}
+
+            for f in fotos:
+                label = safe_label(f["label"])
+                label_count[label] = label_count.get(label,0) + 1
+
+            # ===== ringkasan =====
+            text += "📊 Ringkasan Foto:\n"
+
+            for label,count in label_count.items():
+                text += f"{label} ({count} foto)\n"
+
+            text += "\n"
+
+            # ===== detail =====
+            text += "📋 Detail Foto:\n"
+
+            for i,f in enumerate(fotos,1):
+                text += f"{i}. {f['label']}   /edit{i} /hapus{i}\n"
+            
+
+        await update.message.reply_text(text)
+
         context.user_data["mode"] = "UPLOAD_LABEL"
+
         await update.message.reply_text("Masukkan Label Foto:")
+
         return
 
     if context.user_data.get("mode") == "UPLOAD_LABEL":
-        context.user_data["label"] = safe_label(msg)
+        context.user_data["label"] = safe_label(msg).upper()
         context.user_data["mode"] = "WAIT_FOTO"
         await update.message.reply_text("Kirim foto sekarang.")
         return
@@ -812,11 +996,12 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
     
    
     # ===== FOTO LIST EDIT / HAPUS =====
+
     if msg.startswith("/hapus") and msg[6:].isdigit():
 
         if "INC" not in context.user_data:
             await update.message.reply_text(
-                "❌ Sesi upload tidak aktif. Silakan mulai ulang dari menu Upload Foto."
+                "❌ Sesi upload tidak aktif. Silakan mulai ulang dari Upload Foto."
             )
             return
 
@@ -828,40 +1013,59 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Data tiket tidak ditemukan.")
             return
 
-        fotos = foto_list(ws, row)
+        fotos = foto_list_detail(ws, row)
 
         if 1 <= idx <= len(fotos):
-            col = fotos[idx-1][0]
 
-            # ambil isi cell (label + link)
-            cell_value = get_formula_cell(ws, row, col)
+            f = fotos[idx-1]
 
-            # hapus file dari drive jika ada
-            if cell_value:
-                delete_drive_file_from_cell(cell_value)
+            col = f["col"]
+            line = f["line"]
 
-            # kosongkan cell spreadsheet
-            ws.update_cell(row, col, "")
+            cell = get_formula_cell(ws, row, col) or ""
+
+            lines = cell.split("\n")
+
+            if line >= len(lines):
+                await update.message.reply_text("❌ Data foto tidak valid.")
+                return
+
+            target = lines[line]
+
+            delete_drive_file_from_cell(target)
+
+            del lines[line]
+
+            if len(lines) == 0:
+                ws.update_cell(row, col, "")
+            else:
+                ws.update_cell(row, col, "\n".join(lines))
 
         else:
             await update.message.reply_text("❌ Nomor foto tidak valid.")
             return
 
-        fotos = foto_list(ws, row)
+        fotos = foto_list_detail(ws, row)
 
-        text = "📸 Foto Saat Ini:\n"
-        for i,(c,label) in enumerate(fotos,1):
-            text += f"{i}. {label}  /edit{i} /hapus{i}\n"
+        context.user_data["foto_map"] = fotos
+
+        text = "📸 FOTO SAAT INI:\n\n"
 
         if not fotos:
-            text += "Belum ada.\n"
+            text += "Belum ada foto.\n"
+        else:
+            for i,f in enumerate(fotos,1):
+                text += f"{i}. {f['label']}   /edit{i} /hapus{i}\n"
 
         await update.message.reply_text(text, reply_markup=foto_menu())
+
         return
 
 
+    # ===== EDIT FOTO =====
+
     if msg.startswith("/edit") and msg[5:].isdigit():
-    
+
         if "INC" not in context.user_data:
             await update.message.reply_text(
                 "❌ Sesi upload tidak aktif. Silakan mulai ulang dari Upload Foto."
@@ -870,17 +1074,31 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
         idx = int(msg.replace("/edit",""))
 
-        ws,row,year = find_ticket_global(context.user_data.get("INC",""))
+        ws, row, year = find_ticket_global(context.user_data["INC"])
+
         if not ws:
-            await update.message.reply_text("❌ Data tidak ditemukan.")
+            await update.message.reply_text("❌ Data tiket tidak ditemukan.")
             return
 
-        fotos = foto_list(ws,row)
+        fotos = foto_list_detail(ws, row)
 
         if 1 <= idx <= len(fotos):
-            context.user_data["edit_foto_col"] = fotos[idx-1][0]
-            context.user_data["mode"] = "EDIT_FOTO_LABEL"
-            await update.message.reply_text("Masukkan label baru untuk foto ini:")
+
+            f = fotos[idx-1]
+
+            context.user_data["edit_foto_col"] = f["col"]
+            context.user_data["edit_foto_line"] = f["line"]
+            context.user_data["label"] = f["label"]
+
+            context.user_data["mode"] = "WAIT_EDIT_FOTO"
+
+            await update.message.reply_text(
+                f"Upload foto baru untuk mengganti foto {f['label']}"
+            )
+
+        else:
+            await update.message.reply_text("❌ Nomor foto tidak valid.")
+
         return
 
 

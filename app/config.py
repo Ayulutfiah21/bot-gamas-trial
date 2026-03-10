@@ -36,7 +36,20 @@ BULAN_ID = {
     5:"MEI",6:"JUNI",7:"JULI",8:"AGUSTUS",
     9:"SEPTEMBER",10:"OKTOBER",11:"NOVEMBER",12:"DESEMBER"
 }
-
+BULAN_FOLDER = {
+    1:"01_JANUARI",
+    2:"02_FEBRUARI",
+    3:"03_MARET",
+    4:"04_APIL",
+    5:"05_MEI",
+    6:"06_JUNI",
+    7:"07_JULI",
+    8:"08_AGUSTUS",
+    9:"09_SEPTEMBER",
+    10:"10_OKTOBER",
+    11:"11_NOVEMBER",
+    12:"12_DESEMBER"
+}
 STO_MAPPING = {
     "BBU": {"sheet":"GAMAS BAU BAU","mitra":"FMP BAU BAU"},
     "WNC": {"sheet":"GAMAS BAU BAU","mitra":"FMP WANCI"},

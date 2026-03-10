@@ -1,12 +1,20 @@
 from telegram import Update
 from telegram.ext import ContextTypes
-from app.handlers.text_handler import check_access, get_user, update_status
+from app.handlers.text_handler import (
+    check_access,
+    get_user,
+    update_status,
+    dashboard_cache,
+    get_gamas_dashboard
+)
 from app.services.google_services import client
 from app.config import USER_MANAGEMENT_ID
+
 
 user_sheet = client.open_by_key(USER_MANAGEMENT_ID).worksheet("USERS")
 
 
+# ================= LIST USER =================
 async def listuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if check_access(update) != "ADMIN":
@@ -22,6 +30,7 @@ async def listuser(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text)
 
 
+# ================= APPROVE USER =================
 async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if check_access(update) != "ADMIN":
@@ -36,3 +45,22 @@ async def approve(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("✅ User diaktifkan")
     else:
         await update.message.reply_text("❌ User tidak ditemukan")
+
+
+# ================= REBUILD DASHBOARD =================
+async def rebuild_dashboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+    if check_access(update) != "ADMIN":
+        await update.message.reply_text("❌ Akses ditolak")
+        return
+
+    await update.message.reply_text("🔄 Rebuilding dashboard...")
+
+    # hapus cache lama
+    dashboard_cache["data"] = None
+    dashboard_cache["last_update"] = 0
+
+    # regenerate dashboard
+    get_gamas_dashboard()
+
+    await update.message.reply_text("✅ Dashboard berhasil diperbarui.")
