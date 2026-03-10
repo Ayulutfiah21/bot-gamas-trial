@@ -290,63 +290,42 @@ def get_year_spreadsheet(year, date):
     ).execute()
 
     if files["files"]:
-        return files["files"][0]["id"]
+    
+        sheet_id = files["files"][0]["id"]
+        master = client.open_by_key(sheet_id)
 
-    # ================= CREATE SPREADSHEET =================
-    file = drive.files().create(
-        body={
-            "name": title,
-            "mimeType": "application/vnd.google-apps.spreadsheet",
-            "parents": [folder_id]
-        },
-        fields="id"
-    ).execute()
+        header = [
+            "NO",
+            "STO",
+            "NOMOR TIKET",
+            "CATUAN/ NAMA GAMAS (NAMA ODP / ODC / OLT)",
+            "REPORTED DATE",
+            "JASA",
+            "KETERANGAN",
+            "PIC (NAMA PENGAMBIL)",
+            "NAMA MITRA",
+            "BULAN"
+        ]
 
-    sheet_id = file["id"]
+        # cek apakah sheet sudah ada
+        titles = [ws.title for ws in master.worksheets()]
 
-    # beri akses service account
-    drive.permissions().create(
-        fileId=sheet_id,
-        body={
-            "type": "user",
-            "role": "writer",
-            "emailAddress": CREDS.service_account_email
-        }
-    ).execute()
+        if "GAMAS BAU BAU" not in titles:
+            ws1 = master.sheet1
+            ws1.update_title("GAMAS BAU BAU")
+            ws1.update("A1:J1", [header])
+            ws1.update("A2", "=ROW()-1")
 
-    master = client.open_by_key(sheet_id)
+        if "GAMAS UNAAHA" not in titles:
+            ws2 = master.add_worksheet(
+                title="GAMAS UNAAHA",
+                rows=1000,
+                cols=50
+            )
+            ws2.update("A1:J1", [header])
+            ws2.update("A2", "=ROW()-1")
 
-    header = [
-        "NO",
-        "STO",
-        "NOMOR TIKET",
-        "CATUAN/ NAMA GAMAS (NAMA ODP / ODC / OLT)",
-        "REPORTED DATE",
-        "JASA",
-        "KETERANGAN",
-        "PIC (NAMA PENGAMBIL)",
-        "NAMA MITRA",
-        "BULAN"
-    ]
-
-    # ===== rename sheet1 jadi GAMAS BAU BAU =====
-    ws1 = master.sheet1
-    ws1.update_title("GAMAS BAU BAU")
-    ws1.update("A1:J1", [header])
-    ws1.update("A2", "=ROW()-1")
-
-    # ===== buat sheet kedua =====
-    ws2 = master.add_worksheet(
-        title="GAMAS UNAAHA",
-        rows=1000,
-        cols=50
-    )
-
-    ws2.update("A1:J1", [header])
-    ws2.update("A2", "=ROW()-1")
-
-    return sheet_id
-
+        return sheet_id
 def load_ticket_cache():
     
     global TICKET_CACHE
