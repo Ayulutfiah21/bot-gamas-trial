@@ -283,31 +283,30 @@ def get_year_spreadsheet(year, date):
 
     title = f"GAMAS_{month_name}_{year}"
 
-    # cek apakah spreadsheet sudah ada
     files = drive.files().list(
         q=f"name='{title}' and '{folder_id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
         fields="files(id)"
     ).execute()
 
+    header = [
+        "NO",
+        "STO",
+        "NOMOR TIKET",
+        "CATUAN/ NAMA GAMAS (NAMA ODP / ODC / OLT)",
+        "REPORTED DATE",
+        "JASA",
+        "KETERANGAN",
+        "PIC (NAMA PENGAMBIL)",
+        "NAMA MITRA",
+        "BULAN"
+    ]
+
+    # ================= SPREADSHEET SUDAH ADA =================
     if files["files"]:
-    
+
         sheet_id = files["files"][0]["id"]
         master = client.open_by_key(sheet_id)
 
-        header = [
-            "NO",
-            "STO",
-            "NOMOR TIKET",
-            "CATUAN/ NAMA GAMAS (NAMA ODP / ODC / OLT)",
-            "REPORTED DATE",
-            "JASA",
-            "KETERANGAN",
-            "PIC (NAMA PENGAMBIL)",
-            "NAMA MITRA",
-            "BULAN"
-        ]
-
-        # cek apakah sheet sudah ada
         titles = [ws.title for ws in master.worksheets()]
 
         if "GAMAS BAU BAU" not in titles:
@@ -320,12 +319,42 @@ def get_year_spreadsheet(year, date):
             ws2 = master.add_worksheet(
                 title="GAMAS UNAAHA",
                 rows=1000,
-                cols=50
+                cols=20
             )
             ws2.update("A1:J1", [header])
             ws2.update("A2", "=ROW()-1")
 
         return sheet_id
+
+    # ================= SPREADSHEET BELUM ADA =================
+    file = drive.files().create(
+        body={
+            "name": title,
+            "mimeType": "application/vnd.google-apps.spreadsheet",
+            "parents": [folder_id]
+        },
+        fields="id"
+    ).execute()
+
+    sheet_id = file["id"]
+
+    master = client.open_by_key(sheet_id)
+
+    ws1 = master.sheet1
+    ws1.update_title("GAMAS BAU BAU")
+    ws1.update("A1:J1", [header])
+    ws1.update("A2", "=ROW()-1")
+
+    ws2 = master.add_worksheet(
+        title="GAMAS UNAAHA",
+        rows=1000,
+        cols=20
+    )
+
+    ws2.update("A1:J1", [header])
+    ws2.update("A2", "=ROW()-1")
+
+    return sheet_id
 def load_ticket_cache():
     
     global TICKET_CACHE
