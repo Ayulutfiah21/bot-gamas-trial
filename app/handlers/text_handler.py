@@ -273,13 +273,15 @@ def get_month_folder_foto(parent_folder, date):
     month_name = BULAN_FOLDER[date.month]
 
     return get_folder(month_name, parent_folder)
+
 def get_ticket_folder(ticket, date):
     
     year = date.year
+    month = BULAN_FOLDER[date.month]
 
-    year_folder = get_year_folder_foto(year)
+    year_folder = get_folder(f"01_GAMAS_{year}", DRIVE_ROOT_FOTO)
 
-    month_folder = get_month_folder_foto(year_folder, date)
+    month_folder = get_folder(month, year_folder)
 
     ticket_folder = get_folder(ticket, month_folder)
 
@@ -335,7 +337,7 @@ def get_year_spreadsheet(year, date):
             ws1 = master.sheet1
             ws1.update_title("GAMAS BAU BAU")
             ws1.update("A1:J1", [header])
-            ws1.update("A2", "=ROW()-1")
+            
 
         if "GAMAS UNAAHA" not in titles:
             ws2 = master.add_worksheet(
@@ -344,7 +346,7 @@ def get_year_spreadsheet(year, date):
                 cols=20
             )
             ws2.update("A1:J1", [header])
-            ws2.update("A2", "=ROW()-1")
+            
         
         SPREADSHEET_CACHE[cache_key] = sheet_id
 
@@ -367,7 +369,7 @@ def get_year_spreadsheet(year, date):
     ws1 = master.sheet1
     ws1.update_title("GAMAS BAU BAU")
     ws1.update("A1:J1", [header])
-    ws1.update("A2", "=ROW()-1")
+    
 
     ws2 = master.add_worksheet(
         title="GAMAS UNAAHA",
@@ -376,7 +378,7 @@ def get_year_spreadsheet(year, date):
     )
 
     ws2.update("A1:J1", [header])
-    ws2.update("A2", "=ROW()-1")
+    
     SPREADSHEET_CACHE[cache_key] = sheet_id
 
     return sheet_id
@@ -414,7 +416,6 @@ def load_ticket_cache():
 
                         TICKET_INDEX[ticket] = {
                             "sheet": ws,
-                            "row": i,
                             "year": year
                         }
 
@@ -459,22 +460,33 @@ def ensure_sheet(master, sheet_name):
 # ================= INSERT SORTED =================
 def insert_sorted(ws, row_data, date_value):
     
-    ws.append_row(row_data)
+    # ambil semua tanggal
+    dates = ws.col_values(5)
 
-    rows = ws.get_all_values()
+    insert_position = len(dates) + 1
 
-    header = rows[0]
-    data = rows[1:]
+    for i in range(2, len(dates)+1):
 
-    data.sort(key=lambda x: datetime.strptime(x[4], "%d/%m/%Y"))
+        try:
+            existing_date = datetime.strptime(dates[i-1], "%d/%m/%Y")
 
-    ws.update("A2", data)
+            if date_value < existing_date:
+                insert_position = i
+                break
 
-    numbers = [[i] for i in range(1, len(data)+1)]
+        except:
+            continue
 
-    ws.update(f"A2:A{len(data)+1}", numbers)
+    ws.insert_row(row_data, insert_position)
 
-    return len(data)+1
+    # update nomor otomatis
+    total = len(ws.col_values(1)) - 1
+
+    numbers = [[i] for i in range(1, total+1)]
+
+    ws.update(f"A2:A{total+1}", numbers)
+
+    return insert_position
 
 
 # ================= FIND TIKET LINTAS TAHUN =================
@@ -486,9 +498,32 @@ def find_ticket_global(ticket):
 
         data = TICKET_INDEX[ticket]
 
-        return data["sheet"], data["row"], data["year"]
+        ws = data["sheet"]
+
+        row = find_ticket_row(ws, ticket)
+
+        return ws, row, data["year"]
 
     return None, None, None
+def find_ticket_row(ws, ticket):
+    
+    headers = [h.strip().upper() for h in ws.row_values(1)]
+
+    if "NOMOR TIKET" not in headers:
+        return None
+
+    col = headers.index("NOMOR TIKET") + 1
+
+    values = ws.col_values(col)
+
+    ticket = safe_upper(ticket)
+
+    for i, v in enumerate(values[1:], start=2):
+
+        if safe_upper(v) == ticket:
+            return i
+
+    return None
 
 # ================= FOTO LIST DINAMIS =================
 def foto_list(ws, row):
@@ -511,7 +546,7 @@ def foto_list(ws, row):
 
         cell = row_data[col-1]
 
-        if cell and "HYPERLINK" in cell:
+        if cell and ("HYPERLINK" in cell or "TEXTJOIN" in cell):
 
             lines = cell.split("\n")
 
@@ -541,7 +576,7 @@ def foto_list_detail(ws, row):
 
         cell = row_data[col-1]
 
-        if cell and "HYPERLINK" in cell:
+        if cell and ("HYPERLINK" in cell or "TEXTJOIN" in cell):
 
             lines = cell.split("\n")
 
@@ -580,12 +615,21 @@ def add_foto_link(ws, row, col, url, label):
     
     existing = get_formula_cell(ws, row, col)
 
-    new_link = f'=HYPERLINK("{url}","{label}")'
+    new_link = f'HYPERLINK("{url}","{label}")'
 
-    if existing:
-        value = existing + "\n" + new_link
+    if existing and "TEXTJOIN" in existing:
+
+        links = existing.replace('=TEXTJOIN(CHAR(10),TRUE,', '').rstrip(')')
+        value = f'=TEXTJOIN(CHAR(10),TRUE,{links},{new_link})'
+
+    elif existing:
+
+        old = existing.replace("=", "")
+        value = f'=TEXTJOIN(CHAR(10),TRUE,{old},{new_link})'
+
     else:
-        value = new_link
+
+        value = f'=TEXTJOIN(CHAR(10),TRUE,{new_link})'
 
     ws.update_cell(row, col, value)
 
@@ -1030,7 +1074,6 @@ async def text(update:Update,context:ContextTypes.DEFAULT_TYPE):
 
             TICKET_INDEX[d["INC"]] = {
                 "sheet": ws,
-                "row": row_position,
                 "year": year
             }
 
